@@ -1,9 +1,15 @@
 {
   "compilerOptions": {
-    "module": "ES2020",
-    "target": "ES2020"
+    "module": "ES6",
+    "target": "ES6",
+    "paths": {
+      "@client/*": ["./foundry/client/*"],
+      "@common/*": ["./foundry/common/*"]
+    },
   },
   "exclude": ["node_modules", "**/node_modules/*"],
-  "include": ["main.mjs", "foundry/client/**/*.js", "foundry/**/*.mjs"],
-  "typeAcquisition": {}
+  "include": ["main.mjs", "foundry/client/client.mjs", "global.d.ts"],
+  "typeAcquisition": {
+    "include": ["jquery"]
+  }
 }
