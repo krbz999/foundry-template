@@ -3,6 +3,7 @@
     "editor.defaultFormatter": "vscode.typescript-language-features",
     "editor.wordWrap": "wordWrapColumn",
     "editor.wordWrapColumn": 125,
+    "files.eol": "\n",
     "editor.rulers": [
       {
         "column": 125,
@@ -11,7 +12,14 @@
     ]
   },
   "[json]": {
-    "editor.defaultFormatter": "vscode.json-language-features"
+    "editor.defaultFormatter": "vscode.json-language-features",
+    "files.eol": "\n"
+  },
+  "[handlebars]": {
+    "files.eol": "\n"
+  },
+  "[markdown]": {
+    "files.eol": "\n"
   },
   "javascript.format.semicolons": "insert",
   "css.format.spaceAroundSelectorSeparator": true,
