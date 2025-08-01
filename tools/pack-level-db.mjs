@@ -21,7 +21,6 @@ const PACK_SRC = "src";
 
 /* -------------------------------------------------- */
 
-// eslint-disable-next-line
 const argv = yargs(hideBin(process.argv))
   .command(packageCommand())
   .help().alias("help", "h")
@@ -29,7 +28,6 @@ const argv = yargs(hideBin(process.argv))
 
 /* -------------------------------------------------- */
 
-// eslint-disable-next-line
 function packageCommand() {
   return {
     command: "package [action] [pack] [entry]",
@@ -86,8 +84,23 @@ function cleanPackEntry(data, { ownership = 0 } = {}) {
     if (Object.keys(contents).length === 0) delete data.flags[key];
   });
 
-  if (data.pages) data.pages.forEach(i => cleanPackEntry(i, { ownership: -1 }));
+  const cleanCollection = (collName, ownership = 0) => {
+    if (data[collName]) data[collName].forEach(i => cleanPackEntry(i, { ownership }));
+  };
+
+  cleanCollection("pages", -1);
+  cleanCollection("categories");
+  cleanCollection("results");
+  cleanCollection("items");
+  cleanCollection("effects");
+
   if (data.name) data.name = cleanString(data.name);
+
+  // Adjust `_stats`
+  if (data._stats) {
+    data._stats.lastModifiedBy = "<REPLACE_ME>"; // 16 char string, must conform to id
+    data._stats.exportSource = null;
+  }
 }
 
 /* -------------------------------------------------- */
@@ -200,13 +213,9 @@ async function extractPacks(packName, entryName) {
     console.log(`Extracting pack ${packInfo.name}`);
 
     const folders = {};
-    const containers = {};
     await extractPack(path.join(PACK_DEST, packInfo.name), dest, {
       log: false, transformEntry: e => {
         if (e._key.startsWith("!folders")) folders[e._id] = { name: slugify(e.name), folder: e.folder };
-        else if (manifest.id === "dnd5e" && e.type === "container") containers[e._id] = {
-          name: slugify(e.name), container: e.system?.container, folder: e.folder,
-        };
         return false;
       },
     });
@@ -219,11 +228,6 @@ async function extractPacks(packName, entryName) {
       }
     };
     Object.values(folders).forEach(f => buildPath(folders, f, "folder"));
-    Object.values(containers).forEach(c => {
-      buildPath(containers, c, "container");
-      const folder = folders[c.folder];
-      if (folder) c.path = path.join(folder.path, c.path);
-    });
 
     await extractPack(path.join(PACK_DEST, packInfo.name), dest, {
       log: true, clean: true, transformEntry: entry => {
@@ -231,9 +235,8 @@ async function extractPacks(packName, entryName) {
         cleanPackEntry(entry);
       }, transformName: entry => {
         if (entry._id in folders) return path.join(folders[entry._id].path, "_folder.json");
-        if (entry._id in containers) return path.join(containers[entry._id].path, "_container.json");
         const outputName = slugify(entry.name);
-        const parent = containers[entry.system?.container] ?? folders[entry.folder];
+        const parent = folders[entry.folder];
         return path.join(parent?.path ?? "", `${outputName}-${entry._id}.json`);
       },
     });

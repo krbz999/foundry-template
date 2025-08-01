@@ -5,7 +5,7 @@
     "paths": {
       "@client/*": ["./foundry/client/*"],
       "@common/*": ["./foundry/common/*"]
-    }
+    },
   },
   "exclude": ["node_modules", "**/node_modules/*"],
   "include": ["main.mjs", "foundry/client/client.mjs", "global.d.ts"],

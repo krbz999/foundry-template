@@ -1,0 +1,42 @@
+{
+  "id": "<REPLACE_ME>",
+  "title": "<REPLACE_ME>",
+  "description": "<REPLACE_ME>",
+  "version": "DEVELOP",
+  "compatibility": {
+    "minimum": "13",
+    "verified": "13",
+    "maximum": "13"
+  },
+  "authors": [
+    {
+      "name": "<REPLACE_ME>",
+      "url": "<REPLACE_ME>",
+      "discord": "<REPLACE_ME>"
+    }
+  ],
+  "esmodules": ["main.mjs"],
+  "styles": [{ "src": "main.css", "layer": "system" }],
+  "packs": [],
+  "packFolders": [],
+  "languages": [
+    {
+      "lang": "en",
+      "name": "English",
+      "path": "lang/en.json"
+    }
+  ],
+  "media": [],
+  "grid": {},
+  "socket": false,
+  "url": "https://github.com/<REPLACE_ME>/<REPLACE_ME>",
+  "manifest": "https://github.com/<REPLACE_ME>/<REPLACE_ME>/releases/latest/download/system.json",
+  "license": "<REPLACE_ME>",
+  "changelog": "<REPLACE_ME>",
+  "flags": {
+    "hotReload": {
+      "extensions": ["css", "hbs", "json"],
+      "paths": ["lang", "styles", "templates"]
+    }
+  }
+}

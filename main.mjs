@@ -6,7 +6,7 @@ import * as documents from "./code/documents/_module.mjs";
 import * as helpers from "./code/helpers/_module.mjs";
 import * as utils from "./code/utils/_module.mjs";
 
-globalThis.KEYWORD = {
+globalThis.REPLACE_ME = {
   applications,
   canvas,
   config,
@@ -14,7 +14,7 @@ globalThis.KEYWORD = {
   documents,
   helpers,
   utils,
-  id: "my-module",
+  id: "<REPLACE ME>",
 };
 
 /* -------------------------------------------------- */
