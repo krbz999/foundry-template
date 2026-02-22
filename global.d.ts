@@ -3,7 +3,7 @@ import "@client/global.mjs";
 import "@common/primitives/global.d.mts";
 import "@common/primitives/global.mjs";
 
-// Foundry's use of `Object.assign(globalThis) means many globally available objects are not read as such
+// Foundry's use of `Object.assign(globalThis)` means many globally available objects are not read as such
 // This declare global hopefully fixes that
 declare global {
   // not a real extension of course but simplest way for this to work with the intellisense.
@@ -15,4 +15,5 @@ declare global {
   class Hooks extends foundry.helpers.Hooks {}
   const fromUuid = foundry.utils.fromUuid;
   const fromUuidSync = foundry.utils.fromUuidSync;
+  const getDocumentClass = foundry.utils.getDocumentClass;
 }

@@ -2,7 +2,7 @@
 
 ## Developer Tooling
 
-To start, clone this repository and either place it in or symlink it to your `data/<modules|systems>/<package id>` user data directory.
+To start, clone this repository and either place it in or symlink it to your `data/<modules|systems>/REPLACE_ME` user data directory.
 
 To provide type and i18n support, this repository uses a postinstall script that symlinks your local Foundry installation. For this to work, copy `example-foundry-config.yaml` and rename it to `foundry-config.yaml`, then replace the value of the `installPath` field.
 

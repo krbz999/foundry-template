@@ -1,12 +1,11 @@
 import fs from "fs";
-import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "path";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { compilePack, extractPack } from "@foundryvtt/foundryvtt-cli";
 
 /**
- * Folder where the compiled compendium packs should be located relative to the base module folder.
+ * Folder where the compiled compendium packs should be located relative to the repository folder.
  * @type {string}
  */
 const PACK_DEST = "packs";
@@ -14,7 +13,7 @@ const PACK_DEST = "packs";
 /* -------------------------------------------------- */
 
 /**
- * Folder where source JSON files should be located relative to the module folder.
+ * Folder where source JSON files should be located relative to the repository folder.
  * @type {string}
  */
 const PACK_SRC = "src";
@@ -30,147 +29,123 @@ const argv = yargs(hideBin(process.argv))
 
 function packageCommand() {
   return {
-    command: "package [action] [pack] [entry]",
+    command: "package [action] [pack]",
     describe: "Manage packages",
     builder: yargs => {
       yargs.positional("action", {
         describe: "The action to perform.",
         type: "string",
-        choices: ["unpack", "pack", "clean"],
+        choices: ["unpack", "pack"],
       });
       yargs.positional("pack", {
         describe: "Name of the pack upon which to work.",
         type: "string",
       });
-      yargs.positional("entry", {
-        describe: "Name of any entry within a pack upon which to work. Only applicable to extract & clean commands.",
-        type: "string",
-      });
     },
     handler: async argv => {
-      const { action, pack, entry } = argv;
+      const { action, pack } = argv;
       switch (action) {
-        case "clean":
-          return await cleanPacks(pack, entry);
         case "pack":
           return await compilePacks(pack);
         case "unpack":
-          return await extractPacks(pack, entry);
+          return await extractPacks(pack);
       }
     },
   };
 }
 
 /* -------------------------------------------------- */
-/*   Clean packs                                      */
+/*  Clean Packs                                       */
 /* -------------------------------------------------- */
 
 /**
  * Removes unwanted flags, permissions, and other data from entries before extracting or compiling.
- * @param {object} data                           Data for a single entry to clean.
- * @param {object} [options={}]
- * @param {number} [options.ownership=0]          Value to reset default ownership to.
+ * @param {object} data                     Data for a single entry to clean.
+ * @param {object} options
+ * @param {string} options.documentName         The document name (false positive for folders).
+ * @param {boolean} [options.isFolder=false]    Is this a folder document?
+ * @param {number} [options.ownership=0]        Value to reset default ownership to.
  */
-function cleanPackEntry(data, { ownership = 0 } = {}) {
+function cleanPackEntry(data, { documentName, isFolder = false, ownership = 0 }) {
   if (data.ownership) data.ownership = { default: ownership };
-  delete data.flags?.core?.sourceId;
-  delete data.flags?.importSource;
-  delete data.flags?.exportSource;
-  if (parseInt(data.sort) && (parseInt(data.sort) !== 0)) data.sort = 0;
 
-  // Remove empty entries in flags
-  if (!data.flags) data.flags = {};
-  Object.entries(data.flags).forEach(([key, contents]) => {
-    if (Object.keys(contents).length === 0) delete data.flags[key];
-  });
+  const flags = data.flags ?? {};
+  delete flags.importSource;
+  delete flags.exportSource;
 
-  const cleanCollection = (collName, ownership = 0) => {
-    if (data[collName]) data[collName].forEach(i => cleanPackEntry(i, { ownership }));
-  };
-
-  cleanCollection("pages", -1);
-  cleanCollection("categories");
-  cleanCollection("results");
-  cleanCollection("items");
-  cleanCollection("effects");
-
-  if (data.name) data.name = cleanString(data.name);
-
-  // Adjust `_stats`
-  if (data._stats) {
-    data._stats.lastModifiedBy = "<REPLACE_ME>"; // 16 char string, must conform to id
-    data._stats.exportSource = null;
+  for (const k in flags) {
+    if (!Object.keys(flags[k]).length) delete flags[k];
   }
-}
 
-/* -------------------------------------------------- */
+  // Remove mystery-man.svg from Actors
+  if (!isFolder && (documentName === "Actor") && (data.img === "icons/svg/mystery-man.svg")) {
+    data.img = "";
+    data.prototypeToken.texture.src = "";
+    data.prototypeToken.ring.subject.texture = "";
+  }
 
-/**
- * Removes invisible whitespace characters and normalizes single- and double-quotes.
- * @param {string} str  The string to be cleaned.
- * @returns {string}    The cleaned string.
- */
-function cleanString(str) {
-  return str.replace(/\u2060/gu, "").replace(/[‘’]/gu, "'").replace(/[“”]/gu, "\"");
-}
-
-/* -------------------------------------------------- */
-
-/**
- * Cleans and formats source JSON files, removing unnecessary permissions and flags and adding the proper spacing.
- * @param {string} [packName]   Name of pack to clean. If none provided, all packs will be cleaned.
- * @param {string} [entryName]  Name of a specific entry to clean.
- *
- * - `npm run build:clean` - Clean all source JSON files.
- * - `npm run build:clean -- classes` - Only clean the source files for the specified compendium.
- * - `npm run build:clean -- classes Barbarian` - Only clean a single item from the specified compendium.
- */
-async function cleanPacks(packName, entryName) {
-  entryName = entryName?.toLowerCase();
-  const folders = fs.readdirSync(PACK_SRC, { withFileTypes: true }).filter(file =>
-    file.isDirectory() && (!packName || (packName === file.name)),
-  );
-
-  /**
-   * Walk through directories to find JSON files.
-   * @param {string} directoryPath
-   * @yields {string}
-   */
-  async function* _walkDir(directoryPath) {
-    const directory = await readdir(directoryPath, { withFileTypes: true });
-    for (const entry of directory) {
-      const entryPath = path.join(directoryPath, entry.name);
-      if (entry.isDirectory()) yield* _walkDir(entryPath);
-      else if (path.extname(entry.name) === ".json") yield entryPath;
+  // Clean embedded.
+  if (!isFolder) {
+    if (["Actor", "Item"].includes(documentName)) {
+      for (const effect of data.effects) cleanPackEntry(effect, { documentName: "ActiveEffect" });
     }
-  }
 
-  for (const folder of folders) {
-    console.log(`Cleaning pack ${folder.name}`);
-    for await (const src of _walkDir(path.join(PACK_SRC, folder.name))) {
-      const json = JSON.parse(await readFile(src, { encoding: "utf8" }));
-      if (entryName && (entryName !== json.name.toLowerCase())) continue;
-      if (!json._id || !json._key) {
-        console.log(`Failed to clean \x1b[31m${src}\x1b[0m, must have _id and _key.`);
-        continue;
+    if (["Actor"].includes(documentName)) {
+      for (const item of data.items) cleanPackEntry(item, { documentName: "Item" });
+    }
+
+    if (["JournalEntry"].includes(documentName)) {
+      for (const page of data.pages) cleanPackEntry(page, { documentName: "JournalEntryPage", ownership: -1 });
+    }
+
+    if (["RollTable"].includes(documentName)) {
+      for (const result of data.results) cleanPackEntry(result, { documentName: "TableResult" });
+    }
+
+    // Remove sort.
+    if (["Actor", "ActiveEffect", "Item", "JournalEntry", "Macro", "Playlist", "RollTable", "Scene"].includes(documentName)) {
+      data.sort = 0;
+    }
+
+    if (["Scene"].includes(documentName)) {
+      const embedded = {
+        AmbientLight: "lights",
+        AmbientSound: "sounds",
+        Drawing: "drawings",
+        MeasuredTemplate: "templates",
+        Note: "notes",
+        Region: "regions",
+        Tile: "tiles",
+        Token: "tokens",
+        Wall: "walls",
+      };
+
+      for (const [documentName, collectionName] of Object.entries(embedded)) {
+        for (const embedded of data[collectionName]) cleanPackEntry(embedded, { documentName });
       }
-      cleanPackEntry(json);
-      fs.rmSync(src, { force: true });
-      writeFile(src, `${JSON.stringify(json, null, 2)}\n`, { mode: 0o664 });
     }
+
+    if (["Region"].includes(documentName)) {
+      for (const behavior of data.behaviors) cleanPackEntry(behavior, { documentName: "RegionBehavior" });
+    }
+  }
+
+  if (data._stats) {
+    if (data._stats.modifiedTime) data._stats.modifiedTime = null;
+    if (data._stats.lastModifiedBy) data._stats.lastModifiedBy = "foundrybuilder00";
   }
 }
 
 /* -------------------------------------------------- */
-/*   Compile packs                                    */
+/*   Compile Packs                                    */
 /* -------------------------------------------------- */
 
 /**
  * Compile the source JSON files into compendium packs.
- * @param {string} [packName]       Name of pack to compile. If none provided, all packs will be packed.
+ * @param {string} [packName]   Name of pack to compile. If none provided, all packs will be packed.
  *
- * - `npm run build:db` - Compile all JSON files into their LevelDB files.
- * - `npm run build:db -- classes` - Only compile the specified pack.
+ * - `npm run db:pack`                  Compile all JSON files into their LevelDB files.
+ * - `npm run db:pack -- classes`       Only compile the specified pack.
  */
 async function compilePacks(packName) {
   // Determine which source folders to process
@@ -182,7 +157,7 @@ async function compilePacks(packName) {
     const src = path.join(PACK_SRC, folder.name);
     const dest = path.join(PACK_DEST, folder.name);
     console.log(`Compiling pack ${folder.name}`);
-    await compilePack(src, dest, { recursive: true, log: true, transformEntry: cleanPackEntry });
+    await compilePack(src, dest, { recursive: true, log: true });
   }
 }
 
@@ -192,17 +167,13 @@ async function compilePacks(packName) {
 
 /**
  * Extract the contents of compendium packs to JSON files.
- * @param {string} [packName]       Name of pack to extract. If none provided, all packs will be unpacked.
- * @param {string} [entryName]      Name of a specific entry to extract.
+ * @param {string} [packName]   Name of pack to extract. If none provided, all packs will be unpacked.
  *
- * - `npm build:json - Extract all compendium LevelDB files into JSON files.
- * - `npm build:json -- classes` - Only extract the contents of the specified compendium.
- * - `npm build:json -- classes Barbarian` - Only extract a single item from the specified compendium.
+ * - `npm run db:unpack                   Extract all compendium LevelDB files into JSON files.
+ * - `npm run db:unpack -- classes`       Only extract the contents of the specified compendium.
  */
-async function extractPacks(packName, entryName) {
-  entryName = entryName?.toLowerCase();
-
-  // Load package manifest.
+async function extractPacks(packName) {
+  // Load manifest.
   const manifest = JSON.parse(fs.readFileSync("./<module|system>.json", { encoding: "utf8" }));
 
   // Determine which source packs to process.
@@ -212,32 +183,34 @@ async function extractPacks(packName, entryName) {
     const dest = path.join(PACK_SRC, packInfo.name);
     console.log(`Extracting pack ${packInfo.name}`);
 
-    const folders = {};
-    await extractPack(path.join(PACK_DEST, packInfo.name), dest, {
-      log: false, transformEntry: e => {
-        if (e._key.startsWith("!folders")) folders[e._id] = { name: slugify(e.name), folder: e.folder };
-        return false;
-      },
-    });
-    const buildPath = (collection, entry, parentKey) => {
-      let parent = collection[entry[parentKey]];
-      entry.path = entry.name;
-      while (parent) {
-        entry.path = path.join(parent.name, entry.path);
-        parent = collection[parent[parentKey]];
-      }
-    };
-    Object.values(folders).forEach(f => buildPath(folders, f, "folder"));
+    const isFolder = entry => entry.type === packInfo.type;
 
     await extractPack(path.join(PACK_DEST, packInfo.name), dest, {
-      log: true, clean: true, transformEntry: entry => {
-        if (entryName && (entryName !== entry.name.toLowerCase())) return false;
-        cleanPackEntry(entry);
-      }, transformName: entry => {
-        if (entry._id in folders) return path.join(folders[entry._id].path, "_folder.json");
-        const outputName = slugify(entry.name);
-        const parent = folders[entry.folder];
-        return path.join(parent?.path ?? "", `${outputName}-${entry._id}.json`);
+      log: false,
+      clean: true,
+      folders: true,
+      nedb: false,
+      yaml: false,
+      jsonOptions: { space: 2 },
+      transformEntry: (entry, context = {}) => {
+        cleanPackEntry(entry, { documentName: packInfo.type, isFolder: isFolder(entry) });
+      },
+      transformFolderName: (entry, context = {}) => {
+        let name = `${slugify(entry.name)}-${entry._id}`;
+        if (context.folder) name = path.join(context, context.folder, name);
+        return name;
+      },
+      transformName: (entry, context = {}) => {
+        let name = `${slugify(entry.name)}-${entry._id}.json`;
+
+        if (isFolder(entry)) {
+          name = path.join(`${slugify(entry.name)}-${entry._id}`, "_folder.json");
+        }
+
+        if (context.folder) {
+          name = path.join(context.folder, name);
+        }
+        return name;
       },
     });
   }
