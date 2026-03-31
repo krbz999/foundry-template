@@ -1,7 +1,36 @@
 import postcss from "rollup-plugin-postcss";
 import resolve from "@rollup/plugin-node-resolve";
 import postcssImport from "postcss-import";
-import postcssUrl from "postcss-url";
+import postcssValueParser from "postcss-value-parser";
+
+/**
+ * A URL prefix that should be removed when the css is compiled.
+ * This turns a css property like `url("/systems/my-system/assets/bob.webp")`
+ * into `url("assets/bob.webp")`.
+ * @type {string}
+ */
+const URL_TO_REPLACE = "/<module|system>/REPLACE_ME/";
+
+function adjustCSSUrls() {
+  return {
+    postcssPlugin: "rewrite-system-urls",
+    Declaration(decl) {
+      const parsed = postcssValueParser(decl.value);
+
+      parsed.walk(node => {
+        if ((node.type === "function") && (node.value === "url")) {
+          const urlNode = node.nodes[0];
+          const url = urlNode?.value;
+          if (!url?.startsWith(URL_TO_REPLACE)) return;
+          urlNode.value = url.slice(URL_TO_REPLACE.length);
+        }
+      });
+
+      decl.value = parsed.toString();
+    },
+  };
+}
+adjustCSSUrls.postcss = true;
 
 export default {
   input: "./_main.mjs",
@@ -14,18 +43,7 @@ export default {
     postcss({
       plugins: [
         postcssImport(),
-        postcssUrl({
-          url: asset => {
-            if (!asset.url) return asset.url;
-            const yeet = "/<module|system>/REPLACE_ME/";
-            if (asset.url.startsWith(yeet)) {
-              return asset.url.slice(yeet.length);
-            } else {
-              console.warn("URL THAT ISN'T IN PACKAGE REPOSITORY:", asset.url);
-            }
-            return asset.url;
-          },
-        }),
+        adjustCSSUrls(),
       ],
       extract: true,
     }),
